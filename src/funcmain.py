@@ -161,100 +161,110 @@ def process_item(vehicle : dict, price : str, book_token : str, organization_id 
 
 
 def process_invoice(body: dict) -> int:
-    invoice_count = 0
-    deal_id = body.get("deal_id")
-    order_id = body.get("order_id")
-    book_token = TOKEN_BOOK.get_access_token()
-    crm_token = TOKEN_CRM.get_access_token()
+    try:
+        invoice_count = 0
+        deal_id = body.get("deal_id")
+        order_id = body.get("order_id")
+        book_token = TOKEN_BOOK.get_access_token()
+        crm_token = TOKEN_CRM.get_access_token()
 
-    vehicle_response = ZohoApi(base_url="https://www.zohoapis.ca/crm/v2").fetch_related_list(
-        moduleName="Deals", record_id=deal_id, name="Vehicles", token=crm_token
-    )
-    vehicles = vehicle_response.json().get("data", [])
-    
-    for i, vehicle in enumerate(vehicles):
-        data = process_item(vehicle, body.get("Customer_Price_Excl_Tax"), book_token, os.getenv("ORGANIZATION_ID"), body.get("Carrier_Fee"))
-        if data['code'] != 200:
-            raise Exception(data['message'])
-        item_id = data['item_id']
-
-        customer_id = body.get("Customer_id")
-        customer_account = Customer.search_customer(
-            search_params={"zcrm_account_id": customer_id},
-            book_token=book_token
+        vehicle_response = ZohoApi(base_url="https://www.zohoapis.ca/crm/v2").fetch_related_list(
+            moduleName="Deals", record_id=deal_id, name="Vehicles", token=crm_token
         )
-        customer_data = customer_account.json().get("contacts", [])[0]
-        account_id = customer_data["contact_id"]
-
-        resp = handle_invoice_creation(deal_id, account_id, item_id, body, book_token, uniqueid=f"{order_id}-{i}")
-        if resp.status_code != 201:
-            if resp.json().get("code") == 120303:
-                send_message_to_channel(os.getenv("SLACK_CHANNEL_ID"), f":warning: Internal Server Warning. \n *Details* \n - OrderID: `{order_id}` \n - Message: `{resp.json()}` \n - Origin: Billing Service")
-                logging.info("Invoice already exists, skipping creation")
-                continue
-            raise Exception(resp.json())
-        invoice_count += 1
-
-    if invoice_count == len(vehicles) and invoice_count > 0:
-        code, message = combine_invoices_and_upload(crm_token, book_token, deal_id, order_id)
-        if code != 200:
-            raise Exception(message)
+        vehicles = vehicle_response.json().get("data", [])
         
-        return {"status":"success","message":"Invoices created successfully","invoice_count": invoice_count,"code":200}
+        for i, vehicle in enumerate(vehicles):
+            data = process_item(vehicle, body.get("Customer_Price_Excl_Tax"), book_token, os.getenv("ORGANIZATION_ID"), body.get("Carrier_Fee"))
+            if data['code'] != 200:
+                raise Exception(data['message'])
+            item_id = data['item_id']
 
-    else:
+            customer_id = body.get("Customer_id")
+            customer_account = Customer.search_customer(
+                search_params={"zcrm_account_id": customer_id},
+                book_token=book_token
+            )
+            customer_data = customer_account.json().get("contacts", [])[0]
+            account_id = customer_data["contact_id"]
 
-        return {"status":"failed","message":"Failed to create invoices","invoice_count": invoice_count,"code":500}
+            resp = handle_invoice_creation(deal_id, account_id, item_id, body, book_token, uniqueid=f"{order_id}-{i}")
+            if resp.status_code != 201:
+                if resp.json().get("code") == 120303:
+                    send_message_to_channel(os.getenv("SLACK_CHANNEL_ID"), f":warning: Internal Server Warning. \n *Details* \n - OrderID: `{order_id}` \n - Message: `{resp.json()}` \n - Origin: Billing Service")
+                    logging.info("Invoice already exists, skipping creation")
+                    continue
+                raise Exception(resp.json())
+            invoice_count += 1
 
+        if invoice_count == len(vehicles) and invoice_count > 0:
+            code, message = combine_invoices_and_upload(crm_token, book_token, deal_id, order_id)
+            if code != 200:
+                raise Exception(message)
+            
+            return {"status":"success","message":"Invoices created successfully","invoice_count": invoice_count,"code":200}
+
+        else:
+
+            return {"status":"failed","message":"Failed to create invoices","invoice_count": invoice_count,"code":500}
+
+    except Exception as e:
+        send_message_to_channel(os.getenv("SLACK_CHANNEL_ID"), f":warning: Internal Server Error. \n *Details* \n - OrderID: `{order_id}` \n - Message: `{str(e)}` \n - Origin: Accounting Service -> process invoice")
+
+        return {"status":"failed","error":str(e),"message":"Internal Server Error","code":500}
 
 def process_bill(body: dict) -> int:
-    bill_count = 0
-    deal_id = body.get("deal_id")
-    order_id = body.get("order_id")
-    book_token = TOKEN_BOOK.get_access_token()
-    crm_token = TOKEN_CRM.get_access_token()
+    try:
+        bill_count = 0
+        deal_id = body.get("deal_id")
+        order_id = body.get("order_id")
+        book_token = TOKEN_BOOK.get_access_token()
+        crm_token = TOKEN_CRM.get_access_token()
 
-    vehicle_response = ZohoApi(base_url="https://www.zohoapis.ca/crm/v2").fetch_related_list(
-        moduleName="Deals", record_id=deal_id, name="Vehicles", token=crm_token
-    )
-    vehicles = vehicle_response.json().get("data", [])
-    for index, vehicle in enumerate(vehicles):
-        data = process_item(vehicle, body.get("Customer_Price_Excl_Tax"), book_token, os.getenv("ORGANIZATION_ID"), body.get("Carrier_Fee"))
-        if data['code'] != 200:
-            raise Exception(data['message'])
-        item_id = data['item_id']
-        ## update purchase rate to carrier fee
-        Item.update_item(
-            item_id=item_id,
-            item_data={ "purchase_rate": body.get("Carrier_Fee") },
-            book_token=book_token)
-
-        vendor_name = body.get("vendor_name")
-        vendor_response = Vendor.search_vendor(
-            search_params={"vendor_name": vendor_name},
-            book_token=book_token
+        vehicle_response = ZohoApi(base_url="https://www.zohoapis.ca/crm/v2").fetch_related_list(
+            moduleName="Deals", record_id=deal_id, name="Vehicles", token=crm_token
         )
-        vendor_data = vendor_response.json().get("contacts", [])[0]
-        vendor_book_id = vendor_data["contact_id"]
+        vehicles = vehicle_response.json().get("data", [])
+        for index, vehicle in enumerate(vehicles):
+            data = process_item(vehicle, body.get("Customer_Price_Excl_Tax"), book_token, os.getenv("ORGANIZATION_ID"), body.get("Carrier_Fee"))
+            if data['code'] != 200:
+                raise Exception(data['message'])
+            item_id = data['item_id']
+            ## update purchase rate to carrier fee
+            Item.update_item(
+                item_id=item_id,
+                item_data={ "purchase_rate": body.get("Carrier_Fee") },
+                book_token=book_token)
 
-        resp = handle_bill_creation(index, deal_id, item_id, vendor_book_id, body, book_token)
-        if resp.status_code != 201:
-            if resp.json().get("code") == 13011:
-                send_message_to_channel(os.getenv("SLACK_CHANNEL_ID"), f":warning: Internal Server Warning. \n *Details* \n -OrderID: `{order_id}` \n - Message: `{resp.json()}` \n - Origin: Billing Service")
-                logging.info("Bill already exists, skipping creation")
-                continue
-            raise Exception(resp.json())
-        bill_count += 1
+            vendor_name = body.get("vendor_name")
+            vendor_response = Vendor.search_vendor(
+                search_params={"vendor_name": vendor_name},
+                book_token=book_token
+            )
+            vendor_data = vendor_response.json().get("contacts", [])[0]
+            vendor_book_id = vendor_data["contact_id"]
+
+            resp = handle_bill_creation(index, deal_id, item_id, vendor_book_id, body, book_token)
+            if resp.status_code != 201:
+                if resp.json().get("code") == 13011:
+                    send_message_to_channel(os.getenv("SLACK_CHANNEL_ID"), f":warning: Internal Server Warning. \n *Details* \n -OrderID: `{order_id}` \n - Message: `{resp.json()}` \n - Origin: Billing Service")
+                    logging.info("Bill already exists, skipping creation")
+                    continue
+                raise Exception(resp.json())
+            bill_count += 1
 
 
-    if bill_count == len(vehicles):
-        send_message_to_channel(os.getenv("BILL_CHANNEL_ID"), f":white_check_mark: Bill created successfully! \n *Details*: \n - Order id: `{order_id}` \n - Billed Amount: `CAD {body.get('Carrier_Fee')}` \n - Bill Count: `{bill_count}`")
-        return {"status":"success","message":"Bills created successfully","bill_count": bill_count,"code":200}
-    
-    else:
-    
-        return {"status":"failed","message":"Failed to create bills","bill_count": bill_count,"code":500}
+        if bill_count == len(vehicles):
+            send_message_to_channel(os.getenv("BILL_CHANNEL_ID"), f":white_check_mark: Bill created successfully! \n *Details*: \n - Order id: `{order_id}` \n - Billed Amount: `CAD {body.get('Carrier_Fee')}` \n - Bill Count: `{bill_count}`")
+            return {"status":"success","message":"Bills created successfully","bill_count": bill_count,"code":200}
+        
+        else:
+        
+            return {"status":"failed","message":"Failed to create bills","bill_count": bill_count,"code":500}
 
+    except Exception as e:
+        send_message_to_channel(os.getenv("SLACK_CHANNEL_ID"), f":warning: Internal Server Error. \n *Details* \n - OrderID: `{order_id}` \n - Message: `{str(e)}` \n - Origin: Accounting Service -> process bill")
+
+        return {"status":"failed","error":str(e),"message":"Internal Server Error","code":500}
 
 
 def combine_invoices_and_upload(access_token : str, book_token : str, deal_id : str, reference_id : str):
