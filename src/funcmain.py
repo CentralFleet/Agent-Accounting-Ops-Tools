@@ -208,7 +208,8 @@ def process_invoice(body: dict) -> int:
             return {"status":"failed","message":"Failed to create invoices","invoice_count": invoice_count,"code":500}
 
     except Exception as e:
-        logging.error(e)
+        send_message_to_channel(os.getenv("SLACK_CHANNEL_ID"), f":warning: Internal Server Error. \n *Details* \n - OrderID: `{order_id}` \n - Message: `{str(e)}` \n - Origin: Accounting Service -> process invoice")
+        logging.error(f"Error processing invoice: {str(e)}")
         return {"status":"failed","error":str(e),"message":"Internal Server Error","code":500}
 
 def process_bill(body: dict) -> int:
@@ -262,7 +263,7 @@ def process_bill(body: dict) -> int:
 
     except Exception as e:
         send_message_to_channel(os.getenv("SLACK_CHANNEL_ID"), f":warning: Internal Server Error. \n *Details* \n - OrderID: `{order_id}` \n - Message: `{str(e)}` \n - Origin: Accounting Service -> process bill")
-
+        logging.error(f"Error processing bill: {str(e)}")
         return {"status":"failed","error":str(e),"message":"Internal Server Error","code":500}
 
 
