@@ -230,11 +230,11 @@ def process_bill(body: dict) -> int:
                 raise Exception(data['message'])
             item_id = data['item_id']
             ## update purchase rate to carrier fee
-            Item.update_item(
+            update_response = Item.update_item(
                 item_id=item_id,
                 item_data={ "purchase_rate": body.get("Carrier_Fee") },
                 book_token=book_token)
-
+            logging.info(f"Response: {update_response.json()}")
             vendor_name = body.get("vendor_name")
             vendor_response = Vendor.search_vendor(
                 search_params={"vendor_name": vendor_name},
