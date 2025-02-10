@@ -174,10 +174,18 @@ def process_invoice(body: dict) -> int:
         vehicles = vehicle_response.json().get("data", [])
         
         for i, vehicle in enumerate(vehicles):
+            name = vehicle.get('Year') + '-' + vehicle.get('Make') + '-' + vehicle.get('Model') + '-' + vehicle.get('VIN')
             data = process_item(vehicle, body.get("Customer_Price_Excl_Tax"), book_token, os.getenv("ORGANIZATION_ID"), body.get("Carrier_Fee"))
             if data['code'] != 200:
                 raise Exception(data['message'])
             item_id = data['item_id']
+            # ensure the newly edited price is being reflected in the invoice.
+            update_response = Item.update_item(
+                item_id=item_id,
+                item_data={ "name": name,"rate": float(body.get("Customer_Price_Excl_Tax")) },
+                book_token=book_token)
+
+            logging.info(f"Update response: {update_response.json()}")
 
             customer_id = body.get("Customer_id")
             customer_account = Customer.search_customer(
@@ -211,8 +219,7 @@ def process_invoice(body: dict) -> int:
         send_message_to_channel(os.getenv("SLACK_CHANNEL_ID"), f":warning: Internal Server Error. \n *Details* \n - OrderID: `{order_id}` \n - Message: `{str(e)}` \n - Origin: Accounting Service -> process invoice")
         logging.error(f"Error processing invoice: {str(e)}")
         return {"status":"failed","error":str(e),"message":"Internal Server Error","code":500}
-import requests
-import json
+
 def process_bill(body: dict) -> int:
     try:
         bill_count = 0
@@ -231,11 +238,12 @@ def process_bill(body: dict) -> int:
             if data['code'] != 200:
                 raise Exception(data['message'])
             item_id = data['item_id']
-            ## update purchase rate to carrier fee
+             # ensure the newly edited price is being reflected in the invoice.
             update_response = Item.update_item(
                 item_id=item_id,
                 item_data={ "name": name,"rate": float(body.get("Customer_Price_Excl_Tax")), "purchase_rate": float(body.get("Carrier_Fee")) },
                 book_token=book_token)
+                
             logging.info(f"Update response: {update_response.json()}")
             vendor_name = body.get("vendor_name")
             vendor_response = Vendor.search_vendor(
