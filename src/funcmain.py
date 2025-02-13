@@ -47,7 +47,7 @@ def handle_invoice_creation(deal_id, account_id, item_id, body, book_token,uniqu
         CustomField(customfield_id="30379000000684021", value=uniqueid)
     ]
 
-    line_items = [
+    line_items_ = [
         LineItem(
             item_id=item_id,
             tax_id=body.get("Tax_ID"),
@@ -62,7 +62,7 @@ def handle_invoice_creation(deal_id, account_id, item_id, body, book_token,uniqu
         zcrm_potential_id=str(deal_id),
         reference_number=body.get("order_id"),
         custom_fields=custom_fields,
-        line_items=line_items
+        line_items=line_items_
     )
 
     invoice_resp = Invoice.create_invoice(invoice_obj.dict(), book_token)
@@ -93,7 +93,7 @@ def handle_bill_creation(index, deal_id, item_id, vendor_book_id, body, book_tok
             value_formatted=body.get('order_id')
         )
     ]
-    line_items = [
+    line_items_ = [
         LineItem(
             item_id=item_id,
             tax_id=body.get("Tax_ID"),
@@ -107,9 +107,9 @@ def handle_bill_creation(index, deal_id, item_id, vendor_book_id, body, book_tok
     bill_obj = BillObj(
         vendor_id=vendor_book_id,
         bill_number=bill_number,
-        line_items=[{"item_id": item_id}],
+        # line_items=[{"item_id": item_id}],
         custom_fields=bill_custom_fields,
-        line_items=line_items
+        line_items=line_items_
     )
 
     bill_resp = Bill.create_bill(bill_obj.dict(), book_token)

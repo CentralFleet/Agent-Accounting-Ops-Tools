@@ -44,5 +44,5 @@ class BillCustomField(BaseModel):
 class BillObj(BaseModel):
     vendor_id: str
     bill_number: str
-    line_items: List[dict]
+    line_items: List[LineItem]
     custom_fields: List[BillCustomField]
