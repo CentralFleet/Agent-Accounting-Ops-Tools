@@ -93,12 +93,23 @@ def handle_bill_creation(index, deal_id, item_id, vendor_book_id, body, book_tok
             value_formatted=body.get('order_id')
         )
     ]
+    line_items = [
+        LineItem(
+            item_id=item_id,
+            tax_id=body.get("Tax_ID"),
+            tax_name=body.get("Tax_Name"),
+            tax_type=body.get("Tax_Type"),
+            tax_percentage=body.get("Tax_Rate")
+        )
+    ]
+
 
     bill_obj = BillObj(
         vendor_id=vendor_book_id,
         bill_number=bill_number,
         line_items=[{"item_id": item_id}],
-        custom_fields=bill_custom_fields
+        custom_fields=bill_custom_fields,
+        line_items=line_items
     )
 
     bill_resp = Bill.create_bill(bill_obj.dict(), book_token)
